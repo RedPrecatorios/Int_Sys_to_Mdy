@@ -1,6 +1,3 @@
-# Variáveis de ambiente (contém tokens e segredos)
-.env
-
 # Cache Python
 __pycache__/
 *.py[cod]
