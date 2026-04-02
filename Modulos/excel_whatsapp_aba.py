@@ -14,6 +14,11 @@ Dois layouts suportados (detecção automática pelo cabeçalho):
      a menos que `exige_flag_whatsapp=True` (aí a linha é ignorada)
 
 Nome e processo: cabeçalhos (ex.: Requerente, Numero_de_Processo) ou colunas informadas por letra.
+
+3) **Dois ficheiros** (`caminho_enriquecimento_lemitti` preenchido):
+   - Ficheiro Lemitti (enriquecimento): colunas **U (DD) + V (telefone)** → número sem 55; **Z = 1** → WhatsApp.
+   - Ficheiro FINAL: lê **Requerente** e **Numero_de_Processo** (aba tipo PRC / Sheet1).
+   - Cruza pelo **número de processo** normalizado; um telefone por processo (primeira linha Lemitti válida).
 """
 
 from __future__ import annotations
@@ -216,6 +221,55 @@ def iter_linhas_prc_final(
         yield telefone, nome_s, proc_s
 
 
+def _escolher_planilha_lemitti(wb, nome_aba: Optional[str]) -> Worksheet:
+    """Primeira aba com cabeçalho típico em Z (POSSUI…WHATS…), ou aba explícita, ou primeira do livro."""
+    if nome_aba and nome_aba.strip():
+        if nome_aba.strip() not in wb.sheetnames:
+            raise ValueError(
+                f"Aba de enriquecimento '{nome_aba.strip()}' não encontrada. Abas: {list(wb.sheetnames)}"
+            )
+        return wb[nome_aba.strip()]
+
+    for name in wb.sheetnames:
+        ws = wb[name]
+        z_key = _norm_header(str(ws.cell(row=1, column=COL_WA).value or ""))
+        if "possui" in z_key and "what" in z_key:
+            return ws
+
+    return wb[wb.sheetnames[0]]
+
+
+def mapa_telefone_whatsapp_por_processo_lemitti(
+    ws: Worksheet,
+    linha_cabecalho: int,
+    linha_dados_inicio: int,
+    col_processo: int,
+) -> Dict[str, str]:
+    """
+    Percorre o ficheiro Lemitti: DD (U) + Telefone (V), só Z=1 WhatsApp.
+    Retorna: chave_processo_normalizada -> telefone (primeiro por processo).
+    """
+    out: Dict[str, str] = {}
+    for row in range(linha_dados_inicio, ws.max_row + 1):
+        ddd = _only_digits(ws.cell(row=row, column=COL_DDD).value)
+        tel = _only_digits(ws.cell(row=row, column=COL_TEL).value)
+        if not _whatsapp_flag(ws.cell(row=row, column=COL_WA).value):
+            continue
+        if not ddd and not tel:
+            continue
+        telefone = f"{ddd}{tel}"
+        if not telefone:
+            continue
+        proc = ws.cell(row=row, column=col_processo).value
+        proc_s = str(proc).strip() if proc is not None else ""
+        chave = _norm_processo_key(proc_s)
+        if not chave:
+            continue
+        if chave not in out:
+            out[chave] = telefone
+    return out
+
+
 def _escolher_planilha_fonte(wb, nome_aba: Optional[str]) -> Tuple[Worksheet, Layout]:
     if nome_aba and nome_aba.strip():
         if nome_aba.strip() not in wb.sheetnames:
@@ -252,6 +306,12 @@ class WhatsAppAbaConfig:
     col_nome: Optional[str] = None
     col_processo: Optional[str] = None
     exige_flag_whatsapp: bool = False
+    # Ficheiro separado só de enriquecimento Lemitti (U+V+Z); cruza com o FINAL pelo processo
+    caminho_enriquecimento_lemitti: Optional[str] = None
+    nome_aba_enriquecimento: Optional[str] = None
+    linha_cabecalho_lemitti: int = 1
+    linha_dados_inicio_lemitti: int = 2
+    col_processo_lemitti: Optional[str] = None
 
 
 def _col_letter_to_idx(letter: Optional[str]) -> Optional[int]:
@@ -260,7 +320,99 @@ def _col_letter_to_idx(letter: Optional[str]) -> Optional[int]:
     return column_index_from_string(str(letter).strip().upper())
 
 
+def _aplicar_merge_final_com_lemitti(cfg: WhatsAppAbaConfig) -> Dict[str, object]:
+    """
+    Telefone vem do Excel Lemitti (U+V, Z=1). Nome e processo vêm do FINAL (aba PRC).
+    """
+    caminho_lem = cfg.caminho_enriquecimento_lemitti
+    if not caminho_lem or not str(caminho_lem).strip():
+        raise ValueError("caminho_enriquecimento_lemitti é obrigatório para o modo merge.")
+
+    wb_lem = load_workbook(caminho_lem, data_only=True)
+    try:
+        ws_lem = _escolher_planilha_lemitti(wb_lem, cfg.nome_aba_enriquecimento)
+        titulo_aba_lemitti = ws_lem.title
+        hr_l = cfg.linha_cabecalho_lemitti
+        ds_l = cfg.linha_dados_inicio_lemitti
+        col_pl = _col_letter_to_idx(cfg.col_processo_lemitti)
+        if col_pl is None:
+            _, det_proc = _find_header_columns(ws_lem, hr_l)
+            col_pl = det_proc
+        if col_pl is None:
+            raise ValueError(
+                "No ficheiro Lemitti não foi encontrada coluna de número de processo. "
+                "Use --col-processo-lemitti (letra Excel)."
+            )
+        mapa_tel = mapa_telefone_whatsapp_por_processo_lemitti(ws_lem, hr_l, ds_l, col_pl)
+    finally:
+        wb_lem.close()
+
+    wb = load_workbook(cfg.caminho_arquivo, data_only=True)
+    try:
+        ws_src, layout = _escolher_planilha_fonte(wb, cfg.nome_aba_fonte)
+        if layout != "prc_final":
+            raise ValueError(
+                "Com ficheiro Lemitti separado, o FINAL deve ter layout PRC (cabeçalho TELEFONE_1…). "
+                f"Aba '{ws_src.title}' foi detectada como {layout!r}."
+            )
+
+        hr = cfg.linha_cabecalho
+        ds = cfg.linha_dados_inicio
+        col_nome = _col_letter_to_idx(cfg.col_nome)
+        col_proc = _col_letter_to_idx(cfg.col_processo)
+        if col_nome is None or col_proc is None:
+            det_nome, det_proc = _find_header_columns(ws_src, hr)
+            col_nome = col_nome or det_nome
+            col_proc = col_proc or det_proc
+        if col_nome is None or col_proc is None:
+            raise ValueError(
+                "No FINAL: não foi possível localizar Nome e Número de processo. "
+                "Use --col-nome e --col-processo."
+            )
+
+        vistos: set = set()
+        saida: List[Tuple[str, str, str]] = []
+
+        for row in range(ds, ws_src.max_row + 1):
+            proc = ws_src.cell(row=row, column=col_proc).value
+            proc_s = str(proc).strip() if proc is not None else ""
+            chave = _norm_processo_key(proc_s)
+            if not chave or chave in vistos:
+                continue
+            telefone = mapa_tel.get(chave)
+            if not telefone:
+                continue
+            vistos.add(chave)
+            nome = ws_src.cell(row=row, column=col_nome).value
+            nome_s = str(nome).strip() if nome is not None else ""
+            saida.append((telefone, nome_s, proc_s))
+
+        if cfg.nome_aba_destino in wb.sheetnames:
+            wb.remove(wb[cfg.nome_aba_destino])
+        ws_out = wb.create_sheet(cfg.nome_aba_destino)
+        ws_out.append(["Telefone", "Nome", "Número de processo"])
+        for telefone, nome, proc in saida:
+            ws_out.append([telefone, nome, proc])
+
+        wb.save(cfg.caminho_arquivo)
+
+        return {
+            "linhas_escritas": len(saida),
+            "processos_unicos": len(vistos),
+            "layout": "merge_lemitti_final",
+            "aba_fonte": ws_src.title,
+            "aba_lemitti": titulo_aba_lemitti,
+            "processos_com_whatsapp_lemitti": len(mapa_tel),
+            "aviso": None,
+        }
+    finally:
+        wb.close()
+
+
 def aplicar_aba_whatsapp_final(cfg: WhatsAppAbaConfig) -> Dict[str, object]:
+    if cfg.caminho_enriquecimento_lemitti:
+        return _aplicar_merge_final_com_lemitti(cfg)
+
     wb = load_workbook(cfg.caminho_arquivo, data_only=True)
     try:
         ws_src, layout = _escolher_planilha_fonte(wb, cfg.nome_aba_fonte)

@@ -10,6 +10,7 @@ Se não houver colunas POSSUI_WHATSAPP_n, usa o primeiro TELEFONE_k preenchido
 
 Uso:
     python utils/criar_aba_whatsapp_final.py "FINAL.xlsx"
+    python utils/criar_aba_whatsapp_final.py "FINAL.xlsx" --enriquecimento "Lemitti.xlsx"
     python utils/criar_aba_whatsapp_final.py arquivo.xlsx --aba-fonte Sheet1
 """
 
@@ -27,6 +28,34 @@ def main() -> None:
         description="Cria aba WhatsApp no Excel FINAL (auto: PRC TELEFONE_* ou Lemitti U/V/Z)"
     )
     parser.add_argument("arquivo", help="Caminho do arquivo .xlsx (FINAL)")
+    parser.add_argument(
+        "--enriquecimento",
+        dest="enriquecimento",
+        default=None,
+        help="Excel separado Lemitti: U=DD, V=telefone, Z=POSSUI-WHATSAPP. Cruza com o FINAL pelo nº processo.",
+    )
+    parser.add_argument(
+        "--aba-enriquecimento",
+        default=None,
+        help="Aba no ficheiro Lemitti (omitir = detetar por cabeçalho na coluna Z ou 1.ª aba)",
+    )
+    parser.add_argument(
+        "--col-processo-lemitti",
+        default=None,
+        help="Letra da coluna do número de processo no ficheiro Lemitti (se não detetar pelo cabeçalho)",
+    )
+    parser.add_argument(
+        "--linha-cabecalho-lemitti",
+        type=int,
+        default=1,
+        help="Linha de cabeçalhos no ficheiro Lemitti",
+    )
+    parser.add_argument(
+        "--linha-dados-inicio-lemitti",
+        type=int,
+        default=2,
+        help="Primeira linha de dados no ficheiro Lemitti",
+    )
     parser.add_argument(
         "--aba-fonte",
         "--aba-lemiti",
@@ -53,6 +82,9 @@ def main() -> None:
     if not os.path.isfile(args.arquivo):
         print(f"Arquivo não encontrado: {args.arquivo}", file=sys.stderr)
         sys.exit(1)
+    if args.enriquecimento and not os.path.isfile(args.enriquecimento):
+        print(f"Enriquecimento não encontrado: {args.enriquecimento}", file=sys.stderr)
+        sys.exit(1)
 
     cfg = WhatsAppAbaConfig(
         caminho_arquivo=os.path.abspath(args.arquivo),
@@ -63,6 +95,13 @@ def main() -> None:
         col_nome=args.col_nome,
         col_processo=args.col_processo,
         exige_flag_whatsapp=args.exige_whatsapp,
+        caminho_enriquecimento_lemitti=(
+            os.path.abspath(args.enriquecimento) if args.enriquecimento else None
+        ),
+        nome_aba_enriquecimento=args.aba_enriquecimento,
+        linha_cabecalho_lemitti=args.linha_cabecalho_lemitti,
+        linha_dados_inicio_lemitti=args.linha_dados_inicio_lemitti,
+        col_processo_lemitti=args.col_processo_lemitti,
     )
 
     stats = aplicar_aba_whatsapp_final(cfg)
@@ -70,7 +109,9 @@ def main() -> None:
         f"OK — aba '{args.aba_destino}': {stats['linhas_escritas']} linha(s), "
         f"{stats['processos_unicos']} processo(s) único(s)."
     )
-    print(f"    Layout: {stats['layout']} | Aba fonte: {stats['aba_fonte']!r}")
+    print(f"    Layout: {stats['layout']} | Aba fonte FINAL: {stats['aba_fonte']!r}")
+    if stats.get("aba_lemitti"):
+        print(f"    Aba Lemitti: {stats['aba_lemitti']!r} | Mapa WhatsApp: {stats.get('processos_com_whatsapp_lemitti')} processo(s)")
     if stats.get("aviso"):
         print(f"    Aviso: {stats['aviso']}")
 
