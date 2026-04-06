@@ -11,7 +11,7 @@ import json
 import requests
 from typing import Dict, Any, List, Optional
 
-from config import MONDAY_API_TOKEN, MONDAY_BOARD_ID, MONDAY_API_URL, MONDAY_SMS_BOARD_ID
+from config import MONDAY_API_TOKEN, MONDAY_BOARD_ID, MONDAY_API_URL
 
 
 def _headers() -> Dict[str, str]:
@@ -185,72 +185,6 @@ def criar_item(
     """
     variables = {
         "board_id":      str(MONDAY_BOARD_ID),
-        "item_name":     nome_item,
-        "column_values": column_values,
-    }
-
-    data = _executar_query(mutation, variables)
-    return data.get("create_item", {})
-
-
-# ---------------------------------------------------------------------------
-# Colunas do board SMS
-# Preencher os IDs após executar: python utils/listar_colunas.py --sms
-# ---------------------------------------------------------------------------
-
-COLUNAS_SMS_CONFIG: Dict[str, Dict[str, str]] = {
-    # "campo_interno": {"id": "id_coluna_monday_sms", "tipo": "text"},
-    "contato":  {"id": "PREENCHER", "tipo": "text"},
-    "nome":     {"id": "PREENCHER", "tipo": "text"},
-    "processo": {"id": "PREENCHER", "tipo": "text"},
-}
-
-
-def criar_item_sms(dados_sms: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Cria um item no board SMS da Monday.
-
-    Args:
-        dados_sms: saída do sms_mapeador
-                   {"contato": "55...", "nome": "...", "processo": "..."}
-
-    Returns:
-        Dicionário com id e name do item criado.
-
-    Raises:
-        RuntimeError: se MONDAY_SMS_BOARD_ID não estiver configurado no .env
-    """
-    if not MONDAY_SMS_BOARD_ID:
-        raise RuntimeError(
-            "MONDAY_SMS_BOARD_ID não configurado no .env. "
-            "Informe o ID do board SMS para habilitar esta funcionalidade."
-        )
-
-    values: Dict[str, Any] = {}
-    for campo, config in COLUNAS_SMS_CONFIG.items():
-        if config["id"] == "PREENCHER":
-            continue
-        valor = dados_sms.get(campo, "")
-        if valor:
-            values[config["id"]] = str(valor)
-
-    nome_item     = dados_sms.get("processo") or "Sem título"
-    column_values = json.dumps(values, ensure_ascii=False)
-
-    mutation = """
-    mutation ($board_id: ID!, $item_name: String!, $column_values: JSON!) {
-      create_item(
-        board_id: $board_id
-        item_name: $item_name
-        column_values: $column_values
-      ) {
-        id
-        name
-      }
-    }
-    """
-    variables = {
-        "board_id":      str(MONDAY_SMS_BOARD_ID),
         "item_name":     nome_item,
         "column_values": column_values,
     }

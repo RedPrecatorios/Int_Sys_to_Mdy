@@ -15,3 +15,7 @@ env/
 
 # Logs
 *.log
+
+# Planilhas locais (não fazem parte do código da integração)
+*.xlsx
+*.xls

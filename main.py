@@ -13,10 +13,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from config import CAMPOS_FIXOS
-from Modulos.receptor    import processar_requisicao
-from Modulos.mapeador    import mapear
-from Modulos.sms_mapeador import mapear_sms
-from Modulos.monday_api  import criar_item, criar_item_sms, buscar_usuario_por_email
+from Modulos.receptor import processar_requisicao
+from Modulos.mapeador import mapear
+from Modulos.monday_api import criar_item, buscar_usuario_por_email
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,8 +29,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Resolve o ID do usuário de permissão uma única vez ao iniciar
-_PERMISSAO_EMAIL   = CAMPOS_FIXOS["permissao"]
+_PERMISSAO_EMAIL = CAMPOS_FIXOS["permissao"]
 _PERMISSAO_USER_ID = None
 
 
@@ -57,36 +55,20 @@ async def incluir(request: Request) -> JSONResponse:
 
     try:
         dados_normalizados = processar_requisicao(dados_brutos)
-        dados_mapeados     = mapear(dados_normalizados)
-
-        # Board principal (Inclusões)
+        dados_mapeados = mapear(dados_normalizados)
         resultado = criar_item(dados_mapeados, _PERMISSAO_USER_ID)
         logger.info(
-            f"Item criado (Inclusões): id={resultado.get('id')} | "
+            f"Item criado: id={resultado.get('id')} | "
             f"processo={dados_mapeados.get('processo')} | "
             f"tipo={dados_mapeados.get('rpv_prc')}"
         )
 
-        # Board SMS
-        resultado_sms = None
-        try:
-            dados_sms     = mapear_sms(dados_mapeados)
-            resultado_sms = criar_item_sms(dados_sms)
-            logger.info(
-                f"Item criado (SMS): id={resultado_sms.get('id')} | "
-                f"contato={dados_sms.get('contato')} | "
-                f"nome={dados_sms.get('nome')}"
-            )
-        except RuntimeError as e:
-            logger.warning(f"Board SMS ignorado: {e}")
-
         return JSONResponse(
             status_code=201,
             content={
-                "sucesso":       True,
-                "mensagem":      "Item criado com sucesso na Monday.",
-                "item_inclusoes": resultado,
-                "item_sms":      resultado_sms,
+                "sucesso": True,
+                "mensagem": "Item criado com sucesso na Monday.",
+                "item": resultado,
             },
         )
 
