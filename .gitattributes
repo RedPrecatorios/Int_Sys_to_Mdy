@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts bash para Ubuntu (evita CRLF que quebra shebang)
+*.sh text eol=lf

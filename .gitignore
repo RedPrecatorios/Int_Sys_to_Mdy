@@ -1,3 +1,6 @@
+# Segredos (na VM: copiar .env.example → .env)
+.env
+
 # Cache Python
 __pycache__/
 *.py[cod]

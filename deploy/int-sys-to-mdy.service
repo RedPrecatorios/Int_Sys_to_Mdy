@@ -1,0 +1,24 @@
+# Exemplo de unidade systemd (Ubuntu).
+# Ajuste User, WorkingDirectory e caminho do venv/python.
+#
+# sudo cp deploy/int-sys-to-mdy.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable --now int-sys-to-mdy
+#
+# sudo journalctl -u int-sys-to-mdy -f
+
+[Unit]
+Description=Int_Sys_to_Mdy — receptor FastAPI / Monday
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/Int_Sys_to_Mdy
+EnvironmentFile=/opt/Int_Sys_to_Mdy/.env
+ExecStart=/opt/Int_Sys_to_Mdy/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

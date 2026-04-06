@@ -15,14 +15,18 @@ from config import MONDAY_API_TOKEN, MONDAY_BOARD_ID, MONDAY_API_URL
 
 
 def _headers() -> Dict[str, str]:
+    token = MONDAY_API_TOKEN or ""
     return {
-        "Authorization": MONDAY_API_TOKEN,
+        "Authorization": token,
         "Content-Type":  "application/json",
         "API-Version":   "2024-01",
     }
 
 
 def _executar_query(query: str, variables: Dict = None) -> Dict[str, Any]:
+    if not MONDAY_API_TOKEN or not str(MONDAY_API_TOKEN).strip():
+        raise RuntimeError("MONDAY_API_TOKEN não configurado. Defina no .env na máquina Ubuntu.")
+
     payload = {"query": query}
     if variables:
         payload["variables"] = variables

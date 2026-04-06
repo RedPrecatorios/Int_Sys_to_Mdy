@@ -9,7 +9,8 @@ Uso:
   2) Executar:     python scripts/simular_post_externo.py
 
 Opções:
-  --url URL completa do endpoint (default: http://127.0.0.1:8000/incluir)
+  --url URL completa (default: http://127.0.0.1:8000/incluir).
+  Na cloud Ubuntu use:  python scripts/simular_post_externo.py --url http://IP_DA_VM:8000/incluir
   --sem-pretty     saída JSON numa linha
 """
 
@@ -34,7 +35,7 @@ def payload_exemplo() -> Dict[str, Any]:
     """
     return {
         "ID": "0022451-54.2023.8.26.0053",
-        "agente": "Maria Albuquerque",
+        "agente": "TESTE RED",
         "nome": "PEDRO LUIZ GALRAO DE FRANCA",
         "usuário": "pgalrao",
         "email": "pedro.exemplo@empresa.com.br",

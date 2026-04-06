@@ -7,12 +7,13 @@ Endpoint principal:
 """
 
 import logging
-from typing import Dict, Any
+from contextlib import asynccontextmanager
+from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from config import CAMPOS_FIXOS
+from config import CAMPOS_FIXOS, MONDAY_API_TOKEN
 from Modulos.receptor import processar_requisicao
 from Modulos.mapeador import mapear
 from Modulos.monday_api import criar_item, buscar_usuario_por_email
@@ -23,19 +24,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Int_Sys_to_Mdy",
-    description="Integração: recebe dados externos e insere no board da Monday.com",
-    version="1.0.0",
-)
-
 _PERMISSAO_EMAIL = CAMPOS_FIXOS["permissao"]
 _PERMISSAO_USER_ID = None
 
 
-@app.on_event("startup")
-async def resolver_usuario_permissao() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global _PERMISSAO_USER_ID
+    if not MONDAY_API_TOKEN or not str(MONDAY_API_TOKEN).strip():
+        logger.warning("MONDAY_API_TOKEN não definido ou vazio — /incluir falhará na Monday.")
     try:
         _PERMISSAO_USER_ID = buscar_usuario_por_email(_PERMISSAO_EMAIL)
         if _PERMISSAO_USER_ID:
@@ -44,6 +41,15 @@ async def resolver_usuario_permissao() -> None:
             logger.warning(f"Usuário de permissão não encontrado para o e-mail: {_PERMISSAO_EMAIL}")
     except Exception as e:
         logger.error(f"Erro ao resolver usuário de permissão: {e}")
+    yield
+
+
+app = FastAPI(
+    title="Int_Sys_to_Mdy",
+    description="Integração: recebe dados externos e insere no board da Monday.com",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 @app.post("/incluir", summary="Incluir item na Monday")
