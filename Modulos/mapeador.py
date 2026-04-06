@@ -10,7 +10,7 @@ Campos de saída (Monday):
 
 from typing import Dict, Any
 from config import CAMPOS_FIXOS
-from Modulos.identificador import TIPO_PRC, TIPO_CUMPRIM, identificar_template
+from Modulos.identificador import TIPO_PRC, TIPO_CUMPRIM, TIPO_EXTERNO, identificar_template
 
 
 def _get(dados: Dict[str, Any], *chaves: str, default: Any = "") -> Any:
@@ -42,6 +42,29 @@ def mapear_prc_tjsp(dados: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def mapear_externo(dados: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Payload simulado da plataforma externa: ID, agente, nome, usuario/usuário, email, tipo, status.
+    """
+    usuario = _get(dados, "usuario", "usuário")
+    email = _get(dados, "email")
+    obs = f"Usuário: {usuario} | E-mail: {email}".strip()
+
+    return {
+        "processo": str(_get(dados, "id")),
+        "subelementos": CAMPOS_FIXOS["subelementos"],
+        "incidente": "",
+        "rpv_prc": str(_get(dados, "tipo")),
+        "requerente": str(_get(dados, "nome")),
+        "comprador": str(_get(dados, "agente")),
+        "status_compras": str(_get(dados, "status")),
+        "etapa": CAMPOS_FIXOS["etapa"],
+        "telefone": "",
+        "observacoes_compras": obs,
+        "permissao": CAMPOS_FIXOS["permissao"],
+    }
+
+
 def mapear_cumprimento(dados: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "processo":           _get(dados, "numero_do_cumprimento"),
@@ -67,7 +90,8 @@ def mapear(dados: Dict[str, Any]) -> Dict[str, Any]:
 
     if tipo == TIPO_PRC:
         return mapear_prc_tjsp(dados)
-    elif tipo == TIPO_CUMPRIM:
+    if tipo == TIPO_CUMPRIM:
         return mapear_cumprimento(dados)
-    else:
-        raise ValueError(f"Template não suportado: {tipo}")
+    if tipo == TIPO_EXTERNO:
+        return mapear_externo(dados)
+    raise ValueError(f"Template não suportado: {tipo}")
