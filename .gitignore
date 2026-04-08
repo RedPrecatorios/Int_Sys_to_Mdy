@@ -16,6 +16,9 @@ env/
 # Logs
 *.log
 
+# Variáveis de ambiente / segredos
+.env
+
 # Planilhas locais (não fazem parte do código da integração)
 *.xlsx
 *.xls

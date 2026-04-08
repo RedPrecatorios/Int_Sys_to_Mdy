@@ -79,14 +79,14 @@ def buscar_usuario_por_email(email: str) -> Optional[int]:
     Retorna None se não encontrado.
     """
     query = """
-    query ($email: String!) {
-      users(email: $email) {
+    query ($emails: [String!]) {
+      users(emails: $emails) {
         id
         email
       }
     }
     """
-    data = _executar_query(query, {"email": email})
+    data = _executar_query(query, {"emails": [email]})
     users = data.get("users", [])
     if users:
         return int(users[0]["id"])

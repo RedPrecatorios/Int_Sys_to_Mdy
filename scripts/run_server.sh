@@ -22,4 +22,13 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 WORKERS="${WORKERS:-1}"
 
-exec uvicorn main:app --host "$HOST" --port "$PORT" --workers "$WORKERS"
+if [[ -x "venv/bin/uvicorn" ]]; then
+  UVICORN_BIN="venv/bin/uvicorn"
+elif [[ -x ".venv/bin/uvicorn" ]]; then
+  UVICORN_BIN=".venv/bin/uvicorn"
+else
+  echo "Erro: não encontrei uvicorn no venv (tente ./venv ou ./.venv). Instale requirements.txt no venv correto." >&2
+  exit 1
+fi
+
+exec "$UVICORN_BIN" main:app --host "$HOST" --port "$PORT" --workers "$WORKERS"
