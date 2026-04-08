@@ -3,7 +3,9 @@ import ipaddress
 from typing import List
 from dotenv import load_dotenv
 
-load_dotenv()
+# Carrega .env de forma robusta (evita depender do "cwd" e de introspecção de stack)
+_ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=_ENV_PATH)
 
 # None ou string vazia se não definido (útil para aviso no arranque em cloud)
 _raw_token = os.getenv("MONDAY_API_TOKEN")

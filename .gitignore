@@ -15,6 +15,7 @@ env/
 
 # Logs
 *.log
+logs/
 
 # Variáveis de ambiente / segredos
 .env

@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from config import ALLOWED_SOURCE_IPS, CAMPOS_FIXOS, MONDAY_API_TOKEN, TRUST_PROXY
+from Modulos.auditoria import registrar_requisicao_incluir
 from Modulos.receptor import processar_requisicao
 from Modulos.mapeador import mapear
 from Modulos.monday_api import criar_item, buscar_usuario_por_email
@@ -109,6 +110,23 @@ async def incluir(request: Request) -> JSONResponse:
         dados_brutos: Dict[str, Any] = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="JSON inválido ou ausente no corpo da requisição.")
+
+    # Auditoria: registra o payload recebido (sem bloquear a API em falhas de auditoria)
+    try:
+        rid = registrar_requisicao_incluir(
+            client_ip=_ip_do_cliente(request),
+            path=str(request.url.path),
+            payload=dados_brutos,
+            headers={
+                # guarda alguns headers úteis (sem armazenar Authorization)
+                "user-agent": request.headers.get("user-agent", ""),
+                "content-type": request.headers.get("content-type", ""),
+                "x-forwarded-for": request.headers.get("x-forwarded-for", ""),
+            },
+        )
+        logger.info(f"Requisição auditada: request_id={rid}")
+    except Exception as e:
+        logger.warning(f"Falha ao auditar requisição: {e}")
 
     try:
         dados_normalizados = processar_requisicao(dados_brutos)
