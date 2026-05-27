@@ -12,7 +12,7 @@ Uso:
   python scripts/testar_api_local.py --somente incluir
   python scripts/testar_api_local.py --template externo
   python scripts/testar_api_local.py --template prc
-  python scripts/testar_api_local.py --template cumprimento
+  python scripts/testar_api_local.py --template ligacao
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ except ImportError:
     print("Instale requests: pip install requests", file=sys.stderr)
     raise
 
-Template = Literal["externo", "prc", "cumprimento"]
+Template = Literal["externo", "prc", "cumprimento", "ligacao"]
 
 
 def _print_json(data: Any, pretty: bool) -> None:
@@ -45,6 +45,21 @@ def payload_externo() -> Dict[str, Any]:
         "email": "pedro.exemplo@empresa.com.br",
         "tipo": "PRC-TJSP",
         "status": "Incluir na carteira",
+    }
+
+
+def payload_ligacao() -> Dict[str, Any]:
+    return {
+        "user_ID": 77,
+        "user_agente": "Felipe Perin",
+        "user_nome": "João da Silva",
+        "user_usuario": "felipe",
+        "user_email": "felipe@syscall.com.br",
+        "user_tipo": "Operador",
+        "ligacao_id": 123456,
+        "ligacao_status": "Atendida",
+        "ligacao_acionamento": "Venda realizada",
+        "ligacao_observacao": "Cliente confirmou interesse e solicitou retorno amanhã às 10h.",
     }
 
 
@@ -118,6 +133,8 @@ def _resolver_payload(template: Template) -> Dict[str, Any]:
         return payload_prc()
     if template == "cumprimento":
         return payload_cumprimento()
+    if template == "ligacao":
+        return payload_ligacao()
     raise ValueError(f"Template inválido: {template}")
 
 
@@ -147,7 +164,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--template",
-        choices=["externo", "prc", "cumprimento"],
+        choices=["externo", "prc", "cumprimento", "ligacao"],
         default="externo",
         help="Template usado no POST /incluir",
     )

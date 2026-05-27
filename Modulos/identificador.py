@@ -2,16 +2,20 @@
 Identifica o tipo de template recebido na requisição.
 
 Regra de identificação:
-- Cumprimento → possui o campo 'numero_do_cumprimento' (ou variações)
+- Cumprimento → 'numero_do_cumprimento' no topo ou em custom_data (template ligação)
+- Ligação     → user_* e ligacao_* sem número de cumprimento no custom_data (PRC-TJSP)
 - Externo     → payload com ID, agente, nome, usuário (ou usuario), email, tipo, status
 - PRC-TJSP    → possui o campo 'Numero_do_Incidente' (ou variações)
 """
 
 from typing import Dict, Any, Set
 
+from Modulos.custom_data import tem_numero_cumprimento
+
 TIPO_PRC = "PRC-TJSP"
 TIPO_CUMPRIM = "Cumprimento"
 TIPO_EXTERNO = "externo"
+TIPO_LIGACAO = "ligacao"
 
 _CHAVES_PRC = {
     "numero_do_incidente",
@@ -26,6 +30,23 @@ _CHAVES_CUMPRIM = {
 
 _OBRIGATORIOS_EXTERNO = {"id", "agente", "nome", "email", "tipo", "status"}
 
+# Chaves mínimas para reconhecer template ligação (ligacao_observacao é opcional).
+_CHAVES_MINIMAS_LIGACAO = {
+    "user_id",
+    "user_agente",
+    "user_nome",
+    "user_usuario",
+    "user_email",
+    "user_tipo",
+    "ligacao_id",
+    "ligacao_status",
+    "ligacao_acionamento",
+}
+
+
+def _chaves_template_ligacao(chaves: Set[str]) -> bool:
+    return _CHAVES_MINIMAS_LIGACAO <= chaves
+
 
 def _chaves_template_externo(chaves: Set[str]) -> bool:
     if not _OBRIGATORIOS_EXTERNO <= chaves:
@@ -38,15 +59,19 @@ def identificar_template(dados: Dict[str, Any]) -> str:
     Espera chaves já normalizadas (receptor: minúsculas, espaços → _).
 
     Returns:
-        "PRC-TJSP" | "Cumprimento" | "externo"
+        "PRC-TJSP" | "Cumprimento" | "externo" | "ligacao"
 
     Raises:
         ValueError: se o template não puder ser identificado.
     """
     chaves = set(dados.keys())
 
-    if chaves & _CHAVES_CUMPRIM:
+    # Cumprimento no topo ou dentro de custom_data (template ligação + SysCALL).
+    if chaves & _CHAVES_CUMPRIM or tem_numero_cumprimento(dados):
         return TIPO_CUMPRIM
+
+    if _chaves_template_ligacao(chaves):
+        return TIPO_LIGACAO
 
     if _chaves_template_externo(chaves):
         return TIPO_EXTERNO
@@ -57,5 +82,6 @@ def identificar_template(dados: Dict[str, Any]) -> str:
 
     raise ValueError(
         "Não foi possível identificar o template dos dados recebidos. "
-        "Use PRC-TJSP, Cumprimento, ou o conjunto ID/agente/nome/usuário/email/tipo/status."
+        "Use PRC-TJSP, Cumprimento, template externo (ID/agente/…), "
+        "ou template de ligação (user_*, ligacao_*)."
     )

@@ -10,6 +10,19 @@ from typing import Any, Dict
 _CAMPOS_OBRIGATORIOS_PRC = {"nome", "processo", "tell_1", "tell1", "telefone"}
 _CAMPOS_OBRIGATORIOS_CUMPRIM = {"requerente", "numero_do_cumprimento", "contato", "telefone"}
 _OBRIGATORIOS_EXTERNO = {"id", "agente", "nome", "email", "tipo", "status"}
+# Campos obrigatórios do template ligação (não vazios).
+# ligacao_observacao é opcional: pode faltar ou vir vazio/null.
+_OBRIGATORIOS_LIGACAO = {
+    "user_id",
+    "user_agente",
+    "user_nome",
+    "user_usuario",
+    "user_email",
+    "user_tipo",
+    "ligacao_id",
+    "ligacao_status",
+    "ligacao_acionamento",
+}
 
 
 def _normalizar_chaves(dados: Dict[str, Any]) -> Dict[str, Any]:
@@ -51,8 +64,20 @@ def _validar_template_externo(dados_norm: Dict[str, Any]) -> None:
         raise ValueError(f"O campo '{uk}' não pode estar vazio no payload externo.")
 
 
+def _validar_template_ligacao(dados_norm: Dict[str, Any]) -> None:
+    for k in _OBRIGATORIOS_LIGACAO:
+        if k not in dados_norm:
+            raise ValueError(f"Payload de ligação incompleto: falta o campo '{k}'.")
+        if _campo_externo_vazio(dados_norm.get(k)):
+            raise ValueError(f"O campo '{k}' não pode estar vazio no payload de ligação.")
+
+
 def _validar_campos_minimos(dados_norm: Dict[str, Any]) -> None:
     chaves = set(dados_norm.keys())
+
+    if _OBRIGATORIOS_LIGACAO <= chaves:
+        _validar_template_ligacao(dados_norm)
+        return
 
     if _OBRIGATORIOS_EXTERNO <= chaves and ("usuario" in chaves or "usuário" in chaves):
         _validar_template_externo(dados_norm)
@@ -64,7 +89,8 @@ def _validar_campos_minimos(dados_norm: Dict[str, Any]) -> None:
     if not (tem_prc or tem_cumprim):
         raise ValueError(
             "Dados insuficientes. Certifique-se de que a requisição contém "
-            "os campos necessários para PRC-TJSP, Cumprimento ou o template externo (ID, agente, …)."
+            "os campos necessários para PRC-TJSP, Cumprimento, template externo (ID, agente, …) "
+            "ou template de ligação (user_*, ligacao_*)."
         )
 
 

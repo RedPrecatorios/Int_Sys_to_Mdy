@@ -8,10 +8,87 @@ Responsabilidades:
 """
 
 import json
+import re
 import requests
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from config import MONDAY_API_TOKEN, MONDAY_BOARD_ID, MONDAY_API_URL
+
+
+def _coluna_id_para_campo_interno(column_id: str) -> Optional[str]:
+    for campo, cfg in COLUNAS_CONFIG.items():
+        if cfg.get("id") == column_id:
+            return campo
+    return None
+
+
+def _extrair_label_status(column_value: Any) -> str:
+    """Tenta obter o label enviado a partir do valor bruto da Monday (string JSON ou objeto)."""
+    if column_value is None:
+        return ""
+    s = column_value if isinstance(column_value, str) else json.dumps(column_value, ensure_ascii=False)
+    s = s.strip()
+    if not s:
+        return ""
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict) and "label" in obj:
+            return str(obj.get("label") or "")
+    except json.JSONDecodeError:
+        pass
+    m = re.search(r'"label"\s*=>\s*"([^"]*)"', s)
+    if m:
+        return m.group(1)
+    m = re.search(r'"label"\s*:\s*"([^"]*)"', s)
+    if m:
+        return m.group(1)
+    return s[:200]
+
+
+def _formatar_erros_graphql_monday(errors: List[Any]) -> str:
+    """
+    Monta mensagem legível a partir de errors[] da Monday (ex.: label de status inexistente).
+    """
+    if not isinstance(errors, list) or not errors:
+        return str(errors)
+
+    partes: List[str] = []
+    for err in errors:
+        if not isinstance(err, dict):
+            partes.append(str(err))
+            continue
+
+        msg = err.get("message") or ""
+        ext = err.get("extensions") or {}
+        ed = ext.get("error_data") or {}
+        if not isinstance(ed, dict):
+            partes.append(msg or str(err))
+            continue
+
+        col_name = ed.get("column_name") or "?"
+        col_id = ed.get("column_id") or "?"
+        col_type = ed.get("column_type") or ""
+        col_val = ed.get("column_value")
+        codigo = ed.get("column_validation_error_code") or ""
+
+        campo_interno = _coluna_id_para_campo_interno(str(col_id)) if col_id else None
+        label = _extrair_label_status(col_val)
+
+        trecho = (
+            f'Coluna Monday "{col_name}" (column_id={col_id}'
+            f'{f", tipo={col_type}" if col_type else ""}'
+            f'{f", campo interno={campo_interno!r}" if campo_interno else ""})'
+        )
+        if codigo:
+            trecho += f" código={codigo}"
+        if label or col_val is not None:
+            trecho += f' — valor/label enviado: {label or repr(col_val)}'
+        if msg and msg not in trecho:
+            trecho += f" — {msg}"
+
+        partes.append(trecho)
+
+    return " | ".join(partes) if partes else str(errors)
 
 
 def _headers() -> Dict[str, str]:
@@ -41,7 +118,9 @@ def _executar_query(query: str, variables: Dict = None) -> Dict[str, Any]:
     resultado = response.json()
 
     if "errors" in resultado:
-        raise RuntimeError(f"Erro na API Monday: {resultado['errors']}")
+        erros = resultado["errors"]
+        resumo = _formatar_erros_graphql_monday(erros) if isinstance(erros, list) else str(erros)
+        raise RuntimeError(f"Erro na API Monday: {resumo}")
 
     return resultado.get("data", {})
 
